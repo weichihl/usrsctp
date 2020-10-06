@@ -62,16 +62,16 @@ if (sctp_inet)
 	add_definitions(-DINET)
 endif ()
 
-option(sctp_inet6 "Support IPv6" 1)
+option(sctp_inet6 "Support IPv6" 0)
 if (sctp_inet6)
 	add_definitions(-DINET6)
 endif ()
 
-option(sctp_werror "Treat warning as error" 1)
+option(sctp_werror "Treat warning as error" 0)
 
 option(sctp_link_programs_static "Link example programs static" 0)
 
-option(sctp_build_programs "Build example programs" 1)
+option(sctp_build_programs "Build example programs" 0)
 
 option(sctp_sanitizer_address "Compile with address sanitizer" 0)
 
@@ -124,12 +124,14 @@ endif ()
 # CHECK STRUCT MEMBERS
 #################################################
 
-set(CMAKE_REQUIRED_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/usrsctplib")
-
-check_include_file(usrsctp.h have_usrsctp_h)
-if (NOT have_usrsctp_h)
-	message(FATAL_ERROR "usrsctp.h not found")
-endif ()
+#set(CMAKE_REQUIRED_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/usrsctplib")
+#message("CMAKE_CURRENT_SOURCE_DIR:${CMAKE_CURRENT_SOURCE_DIR}")
+#message("CMAKE_FIND_ROOT_PATH:${CMAKE_FIND_ROOT_PATH}")
+#message("CMAKE_MODULE_PATH:${CMAKE_FIND_ROOT_PATH}")
+#check_include_file(usrsctp.h have_usrsctp_h)
+#if (NOT have_usrsctp_h)
+#	message(FATAL_ERROR "usrsctp.h not found")
+#endif ()
 
 check_struct_has_member("struct sockaddr" "sa_len" "sys/types.h;sys/socket.h" have_sa_len)
 if (have_sa_len)
