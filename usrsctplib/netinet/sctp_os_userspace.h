@@ -41,7 +41,12 @@
  * We will place them in userspace stack build directory.
  */
 
+
+#if 0
 #include <errno.h>
+#else
+#include "lwip/errno.h"
+#endif
 
 #if defined(_WIN32)
 #include <winsock2.h>
@@ -320,9 +325,9 @@ typedef pthread_t userland_thread_t;
 
 /*#include <packon.h>
 #pragma pack(push, 1)*/
-struct ip {
+struct ip_hdr {
 	u_char    ip_hl:4, ip_v:4;
-	u_char    ip_tos;
+	u_char    _tos;
 	u_short   ip_len;
 	u_short   ip_id;
 	u_short   ip_off;
@@ -346,7 +351,7 @@ struct ifaddrs {
 	void		*ifa_data;
 };
 
-struct udphdr {
+struct udp_hdr {
 	uint16_t uh_sport;
 	uint16_t uh_dport;
 	uint16_t uh_ulen;
@@ -457,8 +462,16 @@ struct sx {int dummy;};
 #if !defined(_WIN32) && !defined(__native_client__)
 #include <net/if.h>
 #include <netinet/in.h>
+#if 0
 #include <netinet/in_systm.h>
+#endif
+
+#if 0
 #include <netinet/ip.h>
+#else
+#include "lwip/ip.h"
+#endif
+
 #endif
 #if defined(HAVE_NETINET_IP_ICMP_H)
 #include <netinet/ip_icmp.h>
@@ -472,7 +485,9 @@ struct sx {int dummy;};
 #include <sys/types.h>
 #if !defined(_WIN32)
 #if defined(INET) || defined(INET6)
+#if 0
 #include <ifaddrs.h>
+#endif
 #endif
 
 /* for ioctl */
@@ -507,12 +522,16 @@ struct sx {int dummy;};
 #include <netipsec/ipsec6.h>
 #endif
 #if !defined(_WIN32)
+#if 0
 #include <netinet/ip6.h>
+#endif
 #endif
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__linux__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(_WIN32)
 #include "user_ip6_var.h"
 #else
+#if 0
 #include <netinet6/ip6_var.h>
+#endif
 #endif
 #if defined(__FreeBSD__)
 #include <netinet6/in6_pcb.h>
@@ -591,7 +610,7 @@ MALLOC_DECLARE(SCTP_M_SOCKOPT);
 #define SCTPDBG(level, ...)					\
 {								\
 	do {							\
-		if (SCTP_BASE_SYSCTL(sctp_debug_on) & level) {	\
+		if (1) {	\
 			SCTP_PRINTF(__VA_ARGS__);		\
 		}						\
 	} while (0);						\
@@ -599,7 +618,7 @@ MALLOC_DECLARE(SCTP_M_SOCKOPT);
 #define SCTPDBG_ADDR(level, addr)				\
 {								\
 	do {							\
-		if (SCTP_BASE_SYSCTL(sctp_debug_on) & level ) {	\
+		if (1) {	\
 		    sctp_print_address(addr);			\
 		}						\
 	} while (0);						\
@@ -628,6 +647,10 @@ MALLOC_DECLARE(SCTP_M_SOCKOPT);
 #define SCTP_LTRACE_ERR_RET_PKT(m, inp, stcb, net, file, err)
 #define SCTP_LTRACE_ERR_RET(inp, stcb, net, file, err)
 #endif
+
+
+#define SCTP_ENTER() SCTP_PRINTF("%s enter.\n", __func__);
+#define SCTP_LEAVE() SCTP_PRINTF("%s leave.\n", __func__);
 
 
 /*
@@ -994,7 +1017,7 @@ int sctp_userspace_get_mtu_from_ifn(uint32_t if_index, int af);
 
 #define AF_CONN 123
 struct sockaddr_conn {
-#ifdef HAVE_SCONN_LEN
+#if 1
 	uint8_t sconn_len;
 	uint8_t sconn_family;
 #else

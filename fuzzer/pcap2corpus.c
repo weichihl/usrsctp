@@ -35,7 +35,11 @@
 #include <sys/types.h>
 #include <net/ethernet.h>
 #include <netinet/in.h>
+#if 0
 #include <netinet/ip.h>
+#else
+#include "lwip/ip.h"
+#endif
 #include <netinet/ip6.h>
 #include <pcap/pcap.h>
 #include <stdio.h>
@@ -110,7 +114,7 @@ packet_handler(u_char *user, const struct pcap_pkthdr *pkthdr, const u_char *byt
 	const u_char *bytes_out;
 	FILE *file;
 	char *filename;
-	const struct ip *ip4_hdr_in;
+	const struct ip_hdr *ip4_hdr_in;
 	const struct ip6_hdr *ip6_hdr_in;
 	size_t offset, length;
 	int null = 0;
@@ -124,12 +128,12 @@ packet_handler(u_char *user, const struct pcap_pkthdr *pkthdr, const u_char *byt
 		goto out;
 	}
 	if (args->is_ipv4(bytes_in)) {
-		offset = args->offset + sizeof(struct ip) + sizeof(struct sctphdr);
+		offset = args->offset + sizeof(struct ip_hdr) + sizeof(struct sctphdr);
 		if (pkthdr->caplen < offset) {
 			goto out;
 		}
-		ip4_hdr_in = (const struct ip *)(const void *)(bytes_in + args->offset);
-		if (ip4_hdr_in->ip_p == IPPROTO_SCTP) {
+		ip4_hdr_in = (const struct ip_hdr *)(const void *)(bytes_in + args->offset);
+		if (ip4_hdr_in->_proto == IPPROTO_SCTP) {
 			unsigned int ip4_hdr_len;
 
 			ip4_hdr_len = ip4_hdr_in->ip_hl << 2;

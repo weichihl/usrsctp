@@ -34,8 +34,11 @@
 #ifdef  __cplusplus
 extern "C" {
 #endif
-
+#if 0
 #include <errno.h>
+#else
+#include "lwip/errno.h"
+#endif
 #include <sys/types.h>
 #ifdef _WIN32
 #ifdef _MSC_VER
@@ -119,7 +122,14 @@ struct sctp_common_header {
 /* The definition of struct sockaddr_conn MUST be in
  * tune with other sockaddr_* structures.
  */
-#if defined(__APPLE__) || defined(__Bitrig__) || defined(__DragonFly__) || \
+#if 1
+struct sockaddr_conn {
+	uint8_t sconn_len;
+	uint8_t sconn_family;
+	uint16_t sconn_port;
+	void *sconn_addr;
+};
+#elif defined(__APPLE__) || defined(__Bitrig__) || defined(__DragonFly__) || \
     defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 struct sockaddr_conn {
 	uint8_t sconn_len;
@@ -208,7 +218,15 @@ struct sctp_snd_all_completes {
 	uint32_t sall_num_sent;
 	uint32_t sall_num_failed;
 };
-
+/**
+ * @brief https://tools.ietf.org/html/rfc6458#section-5.3.4
+ * This cmsghdr structure specifies SCTP options for sendmsg().
+ * +--------------+--------------+---------------------+
+ * | cmsg_level   | cmsg_type    | cmsg_data[]         |
+ * +--------------+--------------+---------------------+
+ * | IPPROTO_SCTP | SCTP_SNDINFO | struct sctp_sndinfo |
+ * +--------------+--------------+---------------------+
+*/
 struct sctp_sndinfo {
 	uint16_t snd_sid;
 	uint16_t snd_flags;

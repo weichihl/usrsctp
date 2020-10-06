@@ -98,6 +98,11 @@ sctp_userspace_set_threadname(const char *name)
 int
 sctp_userspace_get_mtu_from_ifn(uint32_t if_index, int af)
 {
+	#if 1
+	//netif->mtu = 1500;
+	//printf(" **************%s***************** ", __func__);
+	return 1500;
+	#else
 	struct ifreq ifr;
 	int fd;
 
@@ -115,6 +120,7 @@ sctp_userspace_get_mtu_from_ifn(uint32_t if_index, int af)
 	} else {
 		return (0);
 	}
+	#endif
 }
 #endif
 

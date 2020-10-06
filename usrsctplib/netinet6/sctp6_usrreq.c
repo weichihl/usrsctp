@@ -60,7 +60,11 @@ __FBSDID("$FreeBSD: head/sys/netinet6/sctp6_usrreq.c 361895 2020-06-07 14:39:20Z
 #include <netinet/sctp_crc32.h>
 #if !defined(_WIN32)
 #include <netinet/icmp6.h>
+#if 0
 #include <netinet/udp.h>
+#else
+#include "lwip/udp.h"
+#endif
 #endif
 #if defined(__Userspace__)
 int ip6_v6only=0;
@@ -373,13 +377,13 @@ sctp6_notify(struct sctp_inpcb *inp,
 		}
 		/* Update the path MTU. */
 		if (net->port) {
-			next_mtu -= sizeof(struct udphdr);
+			next_mtu -= sizeof(struct udp_hdr);
 		}
 		if (net->mtu > next_mtu) {
 			net->mtu = next_mtu;
 #if defined(__FreeBSD__)
 			if (net->port) {
-				sctp_hc_set_mtu(&net->ro._l_addr, inp->fibnum, next_mtu + sizeof(struct udphdr));
+				sctp_hc_set_mtu(&net->ro._l_addr, inp->fibnum, next_mtu + sizeof(struct udp_hdr));
 			} else {
 				sctp_hc_set_mtu(&net->ro._l_addr, inp->fibnum, next_mtu);
 			}

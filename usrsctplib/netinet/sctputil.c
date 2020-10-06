@@ -63,7 +63,11 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctputil.c 363323 2020-07-19 12:34:19Z tuex
 #if defined(INET6) || defined(INET)
 #include <netinet/tcp_var.h>
 #endif
+#if 0
 #include <netinet/udp.h>
+#else
+#include "lwip/udp.h"
+#endif
 #include <netinet/udp_var.h>
 #include <sys/proc.h>
 #ifdef INET6
@@ -5093,8 +5097,8 @@ sctp_print_address(struct sockaddr *sa)
 	case AF_CONN:
 	{
 		struct sockaddr_conn *sconn;
-
 		sconn = (struct sockaddr_conn *)sa;
+		printf("%s(%d):%p\n", __func__, __LINE__, sconn->sconn_addr);
 		SCTP_PRINTF("AF_CONN address: %p\n", sconn->sconn_addr);
 		break;
 	}
@@ -5894,6 +5898,7 @@ sctp_find_ifa_by_addr(struct sockaddr *addr, uint32_t vrf_id, int holds_lock)
 
 	vrf = sctp_find_vrf(vrf_id);
 	if (vrf == NULL) {
+		printf("%s(%d) vrf null\n", __func__, __LINE__);
 		if (holds_lock == 0)
 			SCTP_IPI_ADDR_RUNLOCK();
 		return (NULL);
@@ -5913,11 +5918,21 @@ sctp_find_ifa_by_addr(struct sockaddr *addr, uint32_t vrf_id, int holds_lock)
 
 		return (NULL);
 	}
+	/**
+	 * lwip:
+	 * struct sockaddr {
+				u8_t        sa_len;
+				sa_family_t sa_family;
+				char        sa_data[14];
+				};
+	*/
 	LIST_FOREACH(sctp_ifap, hash_head, next_bucket) {
+		printf("%s(%d) loop(%d)\n", __func__, __LINE__, sctp_ifap->address.sa.sa_family);
 		if (addr->sa_family != sctp_ifap->address.sa.sa_family)
 			continue;
 #ifdef INET
 		if (addr->sa_family == AF_INET) {
+			printf("%s(%d) ipv4\n", __func__, __LINE__);
 			if (((struct sockaddr_in *)addr)->sin_addr.s_addr ==
 			    sctp_ifap->address.sin.sin_addr.s_addr) {
 				/* found him. */
@@ -5927,6 +5942,7 @@ sctp_find_ifa_by_addr(struct sockaddr *addr, uint32_t vrf_id, int holds_lock)
 #endif
 #ifdef INET6
 		if (addr->sa_family == AF_INET6) {
+			printf("%s(%d) ipv6\n", __func__, __LINE__);
 			if (SCTP6_ARE_ADDR_EQUAL((struct sockaddr_in6 *)addr,
 						 &sctp_ifap->address.sin6)) {
 				/* found him. */
@@ -5936,8 +5952,10 @@ sctp_find_ifa_by_addr(struct sockaddr *addr, uint32_t vrf_id, int holds_lock)
 #endif
 #if defined(__Userspace__)
 		if (addr->sa_family == AF_CONN) {
+			printf("%s(%d) conn\n", __func__, __LINE__);
 			if (((struct sockaddr_conn *)addr)->sconn_addr == sctp_ifap->address.sconn.sconn_addr) {
 				/* found him. */
+				printf("%s(%d) found\n", __func__, __LINE__);
 				break;
 			}
 		}
@@ -8070,12 +8088,12 @@ static void
 sctp_recv_udp_tunneled_packet(struct mbuf *m, int off, struct inpcb *inp,
     const struct sockaddr *sa SCTP_UNUSED, void *ctx SCTP_UNUSED)
 {
-	struct ip *iph;
+	struct ip_hdr *iph;
 #ifdef INET6
 	struct ip6_hdr *ip6;
 #endif
 	struct mbuf *sp, *last;
-	struct udphdr *uhdr;
+	struct udp_hdr *uhdr;
 	uint16_t port;
 
 	if ((m->m_flags & M_PKTHDR) == 0) {
@@ -8083,9 +8101,9 @@ sctp_recv_udp_tunneled_packet(struct mbuf *m, int off, struct inpcb *inp,
 		goto out;
 	}
 	/* Pull the src port */
-	iph = mtod(m, struct ip *);
-	uhdr = (struct udphdr *)((caddr_t)iph + off);
-	port = uhdr->uh_sport;
+	iph = mtod(m, struct ip_hdr *);
+	uhdr = (struct udp_hdr *)((caddr_t)iph + off);
+	port = uhdr->src;
 	/* Split out the mbuf chain. Leave the
 	 * IP header in m, place the
 	 * rest in the sp.
@@ -8095,19 +8113,19 @@ sctp_recv_udp_tunneled_packet(struct mbuf *m, int off, struct inpcb *inp,
 		/* Gak, drop packet, we can't do a split */
 		goto out;
 	}
-	if (sp->m_pkthdr.len < sizeof(struct udphdr) + sizeof(struct sctphdr)) {
+	if (sp->m_pkthdr.len < sizeof(struct udp_hdr) + sizeof(struct sctphdr)) {
 		/* Gak, packet can't have an SCTP header in it - too small */
 		m_freem(sp);
 		goto out;
 	}
 	/* Now pull up the UDP header and SCTP header together */
-	sp = m_pullup(sp, sizeof(struct udphdr) + sizeof(struct sctphdr));
+	sp = m_pullup(sp, sizeof(struct udp_hdr) + sizeof(struct sctphdr));
 	if (sp == NULL) {
 		/* Gak pullup failed */
 		goto out;
 	}
 	/* Trim out the UDP header */
-	m_adj(sp, sizeof(struct udphdr));
+	m_adj(sp, sizeof(struct udp_hdr));
 
 	/* Now reconstruct the mbuf chain */
 	for (last = m; last->m_next; last = last->m_next);
@@ -8125,18 +8143,18 @@ sctp_recv_udp_tunneled_packet(struct mbuf *m, int off, struct inpcb *inp,
 	        if_name(m->m_pkthdr.rcvif),
 	        (int)m->m_pkthdr.csum_flags, CSUM_BITS);
 	m->m_pkthdr.csum_flags &= ~CSUM_DATA_VALID;
-	iph = mtod(m, struct ip *);
-	switch (iph->ip_v) {
+	iph = mtod(m, struct ip_hdr *);
+	switch (IPH_V(iph)) {
 #ifdef INET
 	case IPVERSION:
-		iph->ip_len = htons(ntohs(iph->ip_len) - sizeof(struct udphdr));
+		iph->_len = htons(ntohs(iph->_len) - sizeof(struct udp_hdr));
 		sctp_input_with_port(m, off, port);
 		break;
 #endif
 #ifdef INET6
 	case IPV6_VERSION >> 4:
 		ip6 = mtod(m, struct ip6_hdr *);
-		ip6->ip6_plen = htons(ntohs(ip6->ip6_plen) - sizeof(struct udphdr));
+		ip6->ip6_plen = htons(ntohs(ip6->ip6_plen) - sizeof(struct udp_hdr));
 		sctp6_input_with_port(&m, &off, port);
 		break;
 #endif
@@ -8153,10 +8171,10 @@ sctp_recv_udp_tunneled_packet(struct mbuf *m, int off, struct inpcb *inp,
 static void
 sctp_recv_icmp_tunneled_packet(int cmd, struct sockaddr *sa, void *vip, void *ctx SCTP_UNUSED)
 {
-	struct ip *outer_ip, *inner_ip;
+	struct ip_hdr *outer_ip, *inner_ip;
 	struct sctphdr *sh;
 	struct icmp *icmp;
-	struct udphdr *udp;
+	struct udp_hdr *udp;
 	struct sctp_inpcb *inp;
 	struct sctp_tcb *stcb;
 	struct sctp_nets *net;
@@ -8164,15 +8182,15 @@ sctp_recv_icmp_tunneled_packet(int cmd, struct sockaddr *sa, void *vip, void *ct
 	struct sockaddr_in src, dst;
 	uint8_t type, code;
 
-	inner_ip = (struct ip *)vip;
+	inner_ip = (struct ip_hdr *)vip;
 	icmp = (struct icmp *)((caddr_t)inner_ip -
-	    (sizeof(struct icmp) - sizeof(struct ip)));
-	outer_ip = (struct ip *)((caddr_t)icmp - sizeof(struct ip));
-	if (ntohs(outer_ip->ip_len) <
-	    sizeof(struct ip) + 8 + (inner_ip->ip_hl << 2) + sizeof(struct udphdr) + 8) {
+	    (sizeof(struct icmp) - sizeof(struct ip_hdr)));
+	outer_ip = (struct ip_hdr *)((caddr_t)icmp - sizeof(struct ip_hdr));
+	if (ntohs(outer_ip->_len) <
+	    sizeof(struct ip_hdr) + 8 + (inner_ip->ip_hl << 2) + sizeof(struct udp_hdr) + 8) {
 		return;
 	}
-	udp = (struct udphdr *)((caddr_t)inner_ip + (inner_ip->ip_hl << 2));
+	udp = (struct udp_hdr *)((caddr_t)inner_ip + (inner_ip->ip_hl << 2));
 	sh = (struct sctphdr *)(udp + 1);
 	memset(&src, 0, sizeof(struct sockaddr_in));
 	src.sin_family = AF_INET;
@@ -8180,14 +8198,14 @@ sctp_recv_icmp_tunneled_packet(int cmd, struct sockaddr *sa, void *vip, void *ct
 	src.sin_len = sizeof(struct sockaddr_in);
 #endif
 	src.sin_port = sh->src_port;
-	src.sin_addr = inner_ip->ip_src;
+	src.sin_addr = inner_ip->src;
 	memset(&dst, 0, sizeof(struct sockaddr_in));
 	dst.sin_family = AF_INET;
 #ifdef HAVE_SIN_LEN
 	dst.sin_len = sizeof(struct sockaddr_in);
 #endif
 	dst.sin_port = sh->dest_port;
-	dst.sin_addr = inner_ip->ip_dst;
+	dst.sin_addr = inner_ip->dest;
 	/*
 	 * 'dst' holds the dest of the packet that failed to be sent.
 	 * 'src' holds our local endpoint address. Thus we reverse
@@ -8203,8 +8221,8 @@ sctp_recv_icmp_tunneled_packet(int cmd, struct sockaddr *sa, void *vip, void *ct
 	    (net != NULL) &&
 	    (inp != NULL)) {
 		/* Check the UDP port numbers */
-		if ((udp->uh_dport != net->port) ||
-		    (udp->uh_sport != htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port)))) {
+		if ((udp->dest != net->port) ||
+		    (udp->src != htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port)))) {
 			SCTP_TCB_UNLOCK(stcb);
 			return;
 		}
@@ -8221,8 +8239,8 @@ sctp_recv_icmp_tunneled_packet(int cmd, struct sockaddr *sa, void *vip, void *ct
 				return;
 			}
 		} else {
-			if (ntohs(outer_ip->ip_len) >=
-			    sizeof(struct ip) +
+			if (ntohs(outer_ip->_len) >=
+			    sizeof(struct ip_hdr) +
 			    8 + (inner_ip->ip_hl << 2) + 8 + 20) {
 				/*
 				 * In this case we can check if we
@@ -8247,7 +8265,7 @@ sctp_recv_icmp_tunneled_packet(int cmd, struct sockaddr *sa, void *vip, void *ct
 			code = ICMP_UNREACH_PROTOCOL;
 		}
 		sctp_notify(inp, stcb, net, type, code,
-		            ntohs(inner_ip->ip_len),
+		            ntohs(inner_ip->_len),
 		            (uint32_t)ntohs(icmp->icmp_nextmtu));
 #if defined(__Userspace__)
 		if (!(stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_SOCKET_GONE) &&
@@ -8291,7 +8309,7 @@ sctp_recv_icmp6_tunneled_packet(int cmd, struct sockaddr *sa, void *d, void *ctx
 	struct sctp_tcb *stcb;
 	struct sctp_nets *net;
 	struct sctphdr sh;
-	struct udphdr udp;
+	struct udp_hdr udp;
 	struct sockaddr_in6 src, dst;
 	uint8_t type, code;
 
@@ -8307,19 +8325,19 @@ sctp_recv_icmp6_tunneled_packet(int cmd, struct sockaddr *sa, void *d, void *ctx
 	 * verification tag of the SCTP common header.
 	 */
 	if (ip6cp->ip6c_m->m_pkthdr.len <
-	    ip6cp->ip6c_off + sizeof(struct udphdr)+ offsetof(struct sctphdr, checksum)) {
+	    ip6cp->ip6c_off + sizeof(struct udp_hdr)+ offsetof(struct sctphdr, checksum)) {
 		return;
 	}
 	/* Copy out the UDP header. */
-	memset(&udp, 0, sizeof(struct udphdr));
+	memset(&udp, 0, sizeof(struct udp_hdr));
 	m_copydata(ip6cp->ip6c_m,
 		   ip6cp->ip6c_off,
-		   sizeof(struct udphdr),
+		   sizeof(struct udp_hdr),
 		   (caddr_t)&udp);
 	/* Copy out the port numbers and the verification tag. */
 	memset(&sh, 0, sizeof(struct sctphdr));
 	m_copydata(ip6cp->ip6c_m,
-		   ip6cp->ip6c_off + sizeof(struct udphdr),
+		   ip6cp->ip6c_off + sizeof(struct udp_hdr),
 		   sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint32_t),
 		   (caddr_t)&sh);
 	memset(&src, 0, sizeof(struct sockaddr_in6));
@@ -8355,8 +8373,8 @@ sctp_recv_icmp6_tunneled_packet(int cmd, struct sockaddr *sa, void *d, void *ctx
 	    (net != NULL) &&
 	    (inp != NULL)) {
 		/* Check the UDP port numbers */
-		if ((udp.uh_dport != net->port) ||
-		    (udp.uh_sport != htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port)))) {
+		if ((udp.dest != net->port) ||
+		    (udp.src != htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port)))) {
 			SCTP_TCB_UNLOCK(stcb);
 			return;
 		}
@@ -8374,7 +8392,7 @@ sctp_recv_icmp6_tunneled_packet(int cmd, struct sockaddr *sa, void *d, void *ctx
 		} else {
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 			if (ip6cp->ip6c_m->m_pkthdr.len >=
-			    ip6cp->ip6c_off + sizeof(struct udphdr) +
+			    ip6cp->ip6c_off + sizeof(struct udp_hdr) +
 			                      sizeof(struct sctphdr) +
 			                      sizeof(struct sctp_chunkhdr) +
 			                      offsetof(struct sctp_init, a_rwnd)) {
@@ -8388,13 +8406,13 @@ sctp_recv_icmp6_tunneled_packet(int cmd, struct sockaddr *sa, void *d, void *ctx
 
 				m_copydata(ip6cp->ip6c_m,
 					   ip6cp->ip6c_off +
-					   sizeof(struct udphdr) +
+					   sizeof(struct udp_hdr) +
 					   sizeof(struct sctphdr),
 					   sizeof(uint8_t),
 					   (caddr_t)&chunk_type);
 				m_copydata(ip6cp->ip6c_m,
 					   ip6cp->ip6c_off +
-					   sizeof(struct udphdr) +
+					   sizeof(struct udp_hdr) +
 					   sizeof(struct sctphdr) +
 					   sizeof(struct sctp_chunkhdr),
 					   sizeof(uint32_t),

@@ -64,7 +64,11 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_output.c 362178 2020-06-14 16:05:08Z t
 #endif
 #if defined(INET) || defined(INET6)
 #if !defined(_WIN32)
+#if 0
 #include <netinet/udp.h>
+#else
+#include "lwip/udp.h"
+#endif
 #endif
 #endif
 #if !defined(__Userspace__)
@@ -86,6 +90,9 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_output.c 362178 2020-06-14 16:05:08Z t
 #endif
 #endif
 
+#define CMSG_ALIGN(len) (((len) + sizeof (size_t) - 1) \
+			 & (size_t) ~(sizeof (size_t) - 1))
+#define IPVERSION  4
 #define SCTP_MAX_GAPS_INARRAY 4
 struct sack_track {
 	uint8_t right_edge;	/* mergable on the right edge */
@@ -4130,7 +4137,7 @@ int so_locked)
 #if defined(INET) || defined(INET6)
 	struct mbuf *o_pak;
 	sctp_route_t *ro = NULL;
-	struct udphdr *udp = NULL;
+	struct udp_hdr *udp = NULL;
 #endif
 	uint8_t tos_value;
 #if defined(__APPLE__) && !defined(__Userspace__)
@@ -4174,13 +4181,14 @@ int so_locked)
 #ifdef INET
 	case AF_INET:
 	{
-		struct ip *ip = NULL;
+		struct ip_hdr *ip = NULL;
+
 		sctp_route_t iproute;
 		int len;
 
 		len = SCTP_MIN_V4_OVERHEAD;
 		if (port) {
-			len += sizeof(struct udphdr);
+			len += sizeof(struct udp_hdr);
 		}
 		newm = sctp_get_mbuf_for_msg(len, 1, M_NOWAIT, 1, MT_DATA);
 		if (newm == NULL) {
@@ -4202,9 +4210,10 @@ int so_locked)
  		}
 #endif
 		packet_length = sctp_calculate_len(m);
-		ip = mtod(m, struct ip *);
-		ip->ip_v = IPVERSION;
-		ip->ip_hl = (sizeof(struct ip) >> 2);
+		ip = mtod(m, struct ip_hdr *);
+		//ip->ip_v = IPVERSION;
+		//ip->ip_hl = (sizeof(struct ip_hdr) >> 2);
+		IPH_VHL_SET(ip, IPVERSION, (sizeof(struct ip_hdr) >> 2));
 		if (tos_value == 0) {
 			/*
 			 * This means especially, that it is not set at the
@@ -4218,47 +4227,47 @@ int so_locked)
 		}
 		if ((nofragment_flag) && (port == 0)) {
 #if defined(__FreeBSD__) && !defined(__Userspace__)
-			ip->ip_off = htons(IP_DF);
+			ip->_offset = htons(IP_DF);
 #elif defined(WITH_CONVERT_IP_OFF) || defined(__APPLE__)
-			ip->ip_off = IP_DF;
+			ip->_offset = IP_DF;
 #else
-			ip->ip_off = htons(IP_DF);
+			ip->_offset = htons(IP_DF);
 #endif
 		} else {
 #if defined(__FreeBSD__) && !defined(__Userspace__)
-			ip->ip_off = htons(0);
+			ip->_offset = htons(0);
 #else
-			ip->ip_off = 0;
+			ip->_offset = 0;
 #endif
 		}
 #if defined(__Userspace__)
-		ip->ip_id = htons(SCTP_IP_ID(inp)++);
+		ip->_id = htons(SCTP_IP_ID(inp)++);
 #elif defined(__FreeBSD__)
-		/* FreeBSD has a function for ip_id's */
+		/* FreeBSD has a function for _id's */
 		ip_fillid(ip);
 #elif defined(__APPLE__)
 #if RANDOM_IP_ID
-		ip->ip_id = ip_randomid();
+		ip->_id = ip_randomid();
 #else
-		ip->ip_id = htons(ip_id++);
+		ip->_id = htons(ip_id++);
 #endif
 #else
-		ip->ip_id = SCTP_IP_ID(inp)++;
+		ip->_id = SCTP_IP_ID(inp)++;
 #endif
 
-		ip->ip_ttl = inp->ip_inp.inp.inp_ip_ttl;
+		ip->_ttl = inp->ip_inp.inp.inp_ip_ttl;
 #if defined(__FreeBSD__) && !defined(__Userspace__)
-		ip->ip_len = htons(packet_length);
+		ip->_len = htons(packet_length);
 #else
-		ip->ip_len = packet_length;
+		ip->_len = packet_length;
 #endif
-		ip->ip_tos = tos_value;
+		ip->_tos = tos_value;
 		if (port) {
-			ip->ip_p = IPPROTO_UDP;
+			ip->_proto = IPPROTO_UDP;
 		} else {
-			ip->ip_p = IPPROTO_SCTP;
+			ip->_proto = IPPROTO_SCTP;
 		}
-		ip->ip_sum = 0;
+		ip->_chksum = 0;
 		if (net == NULL) {
 			ro = &iproute;
 			memset(&iproute, 0, sizeof(iproute));
@@ -4271,7 +4280,7 @@ int so_locked)
 			ro = (sctp_route_t *)&net->ro;
 		}
 		/* Now the address selection part */
-		ip->ip_dst.s_addr = ((struct sockaddr_in *)to)->sin_addr.s_addr;
+		ip->dest.addr = ((struct sockaddr_in *)to)->sin_addr.s_addr;
 
 		/* call the routine to select the src address */
 		if (net && out_of_asoc_ok == 0) {
@@ -4303,7 +4312,7 @@ int so_locked)
 				sctp_m_freem(m);
 				return (EHOSTUNREACH);
 			}
-			ip->ip_src = net->ro._s_addr->address.sin.sin_addr;
+			ip->src.addr = net->ro._s_addr->address.sin.sin_addr.s_addr;
 		} else {
 			if (over_addr == NULL) {
 				struct sctp_ifa *_lsrc;
@@ -4318,10 +4327,10 @@ int so_locked)
 					sctp_m_freem(m);
 					return (EHOSTUNREACH);
 				}
-				ip->ip_src = _lsrc->address.sin.sin_addr;
+				ip->src.addr = _lsrc->address.sin.sin_addr.s_addr;
 				sctp_free_ifa(_lsrc);
 			} else {
-				ip->ip_src = over_addr->sin.sin_addr;
+				ip->src.addr = over_addr->sin.sin_addr.s_addr;
 				SCTP_RTALLOC(ro, vrf_id, inp->fibnum);
 			}
 		}
@@ -4332,26 +4341,26 @@ int so_locked)
 				sctp_m_freem(m);
 				return (EHOSTUNREACH);
 			}
-			udp = (struct udphdr *)((caddr_t)ip + sizeof(struct ip));
-			udp->uh_sport = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
-			udp->uh_dport = port;
-			udp->uh_ulen = htons((uint16_t)(packet_length - sizeof(struct ip)));
+			udp = (struct udp_hdr *)((caddr_t)ip + sizeof(struct ip_hdr));
+			udp->src = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
+			udp->dest = port;
+			udp->len = htons((uint16_t)(packet_length - sizeof(struct ip_hdr)));
 #if !defined(__Userspace__)
 #if defined(__FreeBSD__)
 			if (V_udp_cksum) {
-				udp->uh_sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr, udp->uh_ulen + htons(IPPROTO_UDP));
+				udp->chksum = in_pseudo(ip->src.addr, ip->dest.addr, udp->len + htons(IPPROTO_UDP));
 			} else {
-				udp->uh_sum = 0;
+				udp->chksum = 0;
 			}
 #else
-			udp->uh_sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr, udp->uh_ulen + htons(IPPROTO_UDP));
+			udp->chksum = in_pseudo(ip->src.addr, ip->dest.addr, udp->len + htons(IPPROTO_UDP));
 #endif
 #else
-			udp->uh_sum = 0;
+			udp->chksum = 0;
 #endif
-			sctphdr = (struct sctphdr *)((caddr_t)udp + sizeof(struct udphdr));
+			sctphdr = (struct sctphdr *)((caddr_t)udp + sizeof(struct udp_hdr));
 		} else {
-			sctphdr = (struct sctphdr *)((caddr_t)ip + sizeof(struct ip));
+			sctphdr = (struct sctphdr *)((caddr_t)ip + sizeof(struct ip_hdr));
 		}
 
 		sctphdr->src_port = src_port;
@@ -4385,9 +4394,9 @@ int so_locked)
 			memcpy(&iproute, ro, sizeof(*ro));
 		}
 		SCTPDBG(SCTP_DEBUG_OUTPUT3, "Calling ipv4 output routine from low level src addr:%x\n",
-			(uint32_t) (ntohl(ip->ip_src.s_addr)));
+			(uint32_t) (ntohl(ip->src.addr)));
 		SCTPDBG(SCTP_DEBUG_OUTPUT3, "Destination is %x\n",
-			(uint32_t)(ntohl(ip->ip_dst.s_addr)));
+			(uint32_t)(ntohl(ip->dest.addr)));
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 		SCTPDBG(SCTP_DEBUG_OUTPUT3, "RTP route is %p through\n",
 			(void *)ro->ro_nh);
@@ -4404,7 +4413,7 @@ int so_locked)
 		}
 		SCTP_ATTACH_CHAIN(o_pak, m, packet_length);
 		if (port) {
-			sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip) + sizeof(struct udphdr));
+			sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip_hdr) + sizeof(struct udp_hdr));
 			SCTP_STAT_INCR(sctps_sendswcrc);
 #if !defined(__Userspace__)
 #if defined(__FreeBSD__)
@@ -4423,7 +4432,7 @@ int so_locked)
 #else
 			if (!(SCTP_BASE_SYSCTL(sctp_no_csum_on_loopback) &&
 			      (stcb) && (stcb->asoc.scope.loopback_scope))) {
-				sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip));
+				sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip_hdr));
 				SCTP_STAT_INCR(sctps_sendswcrc);
 			} else {
 				SCTP_STAT_INCR(sctps_sendhwcrc);
@@ -4491,7 +4500,7 @@ int so_locked)
 #endif
 				if (mtu > 0) {
 					if (net->port) {
-						mtu -= sizeof(struct udphdr);
+						mtu -= sizeof(struct udp_hdr);
 					}
 					if (mtu < net->mtu) {
 						if ((stcb != NULL) && (stcb->asoc.smallest_mtu > mtu)) {
@@ -4556,7 +4565,7 @@ int so_locked)
 		flowlabel &= 0x000fffff;
 		len = SCTP_MIN_OVERHEAD;
 		if (port) {
-			len += sizeof(struct udphdr);
+			len += sizeof(struct udp_hdr);
 		}
 		newm = sctp_get_mbuf_for_msg(len, 1, M_NOWAIT, 1, MT_DATA);
 		if (newm == NULL) {
@@ -4821,12 +4830,12 @@ int so_locked)
 				sctp_m_freem(m);
 				return (EHOSTUNREACH);
 			}
-			udp = (struct udphdr *)((caddr_t)ip6h + sizeof(struct ip6_hdr));
-			udp->uh_sport = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
-			udp->uh_dport = port;
-			udp->uh_ulen = htons((uint16_t)(packet_length - sizeof(struct ip6_hdr)));
-			udp->uh_sum = 0;
-			sctphdr = (struct sctphdr *)((caddr_t)udp + sizeof(struct udphdr));
+			udp = (struct udp_hdr *)((caddr_t)ip6h + sizeof(struct ip6_hdr));
+			udp->src = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
+			udp->dest = port;
+			udp->len = htons((uint16_t)(packet_length - sizeof(struct ip6_hdr)));
+			udp->chksum = 0;
+			sctphdr = (struct sctphdr *)((caddr_t)udp + sizeof(struct udp_hdr));
 		} else {
 			sctphdr = (struct sctphdr *)((caddr_t)ip6h + sizeof(struct ip6_hdr));
 		}
@@ -4871,14 +4880,14 @@ int so_locked)
 		}
 		SCTP_ATTACH_CHAIN(o_pak, m, packet_length);
 		if (port) {
-			sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip6_hdr) + sizeof(struct udphdr));
+			sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip6_hdr) + sizeof(struct udp_hdr));
 			SCTP_STAT_INCR(sctps_sendswcrc);
 #if !defined(__Userspace__)
 #if defined(_WIN32)
-			udp->uh_sum = 0;
+			udp->chksum = 0;
 #else
-			if ((udp->uh_sum = in6_cksum(o_pak, IPPROTO_UDP, sizeof(struct ip6_hdr), packet_length - sizeof(struct ip6_hdr))) == 0) {
-				udp->uh_sum = 0xffff;
+			if ((udp->chksum = in6_cksum(o_pak, IPPROTO_UDP, sizeof(struct ip6_hdr), packet_length - sizeof(struct ip6_hdr))) == 0) {
+				udp->chksum = 0xffff;
 			}
 #endif
 #endif
@@ -4981,7 +4990,7 @@ int so_locked)
 #endif
 				if (mtu > 0) {
 					if (net->port) {
-						mtu -= sizeof(struct udphdr);
+						mtu -= sizeof(struct udp_hdr);
 					}
 					if (mtu < net->mtu) {
 						if ((stcb != NULL) && (stcb->asoc.smallest_mtu > mtu)) {
@@ -5547,7 +5556,7 @@ sctp_arethere_unrecognized_parameters(struct mbuf *in_initpkt,
 #ifdef INET6
 				SCTP_BUF_RESV_UF(op_err, sizeof(struct ip6_hdr));
 #else
-				SCTP_BUF_RESV_UF(op_err, sizeof(struct ip));
+				SCTP_BUF_RESV_UF(op_err, sizeof(struct ip_hdr));
 #endif
 				SCTP_BUF_RESV_UF(op_err, sizeof(struct sctphdr));
 				SCTP_BUF_RESV_UF(op_err, sizeof(struct sctp_chunkhdr));
@@ -5589,7 +5598,7 @@ sctp_arethere_unrecognized_parameters(struct mbuf *in_initpkt,
 #ifdef INET6
 						SCTP_BUF_RESV_UF(op_err, sizeof(struct ip6_hdr));
 #else
-						SCTP_BUF_RESV_UF(op_err, sizeof(struct ip));
+						SCTP_BUF_RESV_UF(op_err, sizeof(struct ip_hdr));
 #endif
 						SCTP_BUF_RESV_UF(op_err, sizeof(struct sctphdr));
 						SCTP_BUF_RESV_UF(op_err, sizeof(struct sctp_chunkhdr));
@@ -5681,7 +5690,7 @@ sctp_arethere_unrecognized_parameters(struct mbuf *in_initpkt,
 #ifdef INET6
 			SCTP_BUF_RESV_UF(op_err, sizeof(struct ip6_hdr));
 #else
-			SCTP_BUF_RESV_UF(op_err, sizeof(struct ip));
+			SCTP_BUF_RESV_UF(op_err, sizeof(struct ip_hdr));
 #endif
 			SCTP_BUF_RESV_UF(op_err, sizeof(struct sctphdr));
 			SCTP_BUF_RESV_UF(op_err, sizeof(struct sctp_chunkhdr));
@@ -11640,7 +11649,7 @@ sctp_send_resp_msg(struct sockaddr *src, struct sockaddr *dst,
 	struct sctphdr *shout;
 	struct sctp_chunkhdr *ch;
 #if defined(INET) || defined(INET6)
-	struct udphdr *udp;
+	struct udp_hdr *udp;
 #endif
 	int ret, len, cause_len, padding_len;
 #ifdef INET
@@ -11648,7 +11657,7 @@ sctp_send_resp_msg(struct sockaddr *src, struct sockaddr *dst,
 	sctp_route_t ro;
 #endif
 	struct sockaddr_in *src_sin, *dst_sin;
-	struct ip *ip;
+	struct ip_hdr *ip;
 #endif
 #ifdef INET6
 	struct sockaddr_in6 *src_sin6, *dst_sin6;
@@ -11683,7 +11692,7 @@ sctp_send_resp_msg(struct sockaddr *src, struct sockaddr *dst,
 	switch (dst->sa_family) {
 #ifdef INET
 	case AF_INET:
-		len += sizeof(struct ip);
+		len += sizeof(struct ip_hdr);
 		break;
 #endif
 #ifdef INET6
@@ -11696,7 +11705,7 @@ sctp_send_resp_msg(struct sockaddr *src, struct sockaddr *dst,
 	}
 #if defined(INET) || defined(INET6)
 	if (port) {
-		len += sizeof(struct udphdr);
+		len += sizeof(struct udp_hdr);
 	}
 #endif
 #if defined(__APPLE__) && !defined(__Userspace__)
@@ -11741,40 +11750,41 @@ sctp_send_resp_msg(struct sockaddr *src, struct sockaddr *dst,
 	case AF_INET:
 		src_sin = (struct sockaddr_in *)src;
 		dst_sin = (struct sockaddr_in *)dst;
-		ip = mtod(mout, struct ip *);
-		ip->ip_v = IPVERSION;
-		ip->ip_hl = (sizeof(struct ip) >> 2);
-		ip->ip_tos = 0;
+		ip = mtod(mout, struct ip_hdr *);
+		//ip->ip_v = IPVERSION;
+		//ip->ip_hl = (sizeof(struct ip_hdr) >> 2);
+		IPH_VHL_SET(ip, IPVERSION, (sizeof(struct ip_hdr) >> 2));
+		ip->_tos = 0;
 #if defined(__FreeBSD__) && !defined(__Userspace__)
-		ip->ip_off = htons(IP_DF);
+		ip->_offset = htons(IP_DF);
 #elif defined(WITH_CONVERT_IP_OFF) || defined(__APPLE__)
-		ip->ip_off = IP_DF;
+		ip->_offset = IP_DF;
 #else
-		ip->ip_off = htons(IP_DF);
+		ip->_offset = htons(IP_DF);
 #endif
 #if defined(__Userspace__)
-		ip->ip_id = htons(ip_id++);
+		ip->_id = htons(ip_id++);
 #elif defined(__FreeBSD__)
 		ip_fillid(ip);
 #elif defined(__APPLE__)
 #if RANDOM_IP_ID
-		ip->ip_id = ip_randomid();
+		ip->_id = ip_randomid();
 #else
-		ip->ip_id = htons(ip_id++);
+		ip->_id = htons(ip_id++);
 #endif
 #else
-		ip->ip_id = ip_id++;
+		ip->_id = ip_id++;
 #endif
-		ip->ip_ttl = MODULE_GLOBAL(ip_defttl);
+		ip->_ttl = MODULE_GLOBAL(ip_defttl);
 		if (port) {
-			ip->ip_p = IPPROTO_UDP;
+			ip->_proto = IPPROTO_UDP;
 		} else {
-			ip->ip_p = IPPROTO_SCTP;
+			ip->_proto = IPPROTO_SCTP;
 		}
-		ip->ip_src.s_addr = dst_sin->sin_addr.s_addr;
-		ip->ip_dst.s_addr = src_sin->sin_addr.s_addr;
-		ip->ip_sum = 0;
-		len = sizeof(struct ip);
+		ip->src.addr = dst_sin->sin_addr.s_addr;
+		ip->dest.addr = src_sin->sin_addr.s_addr;
+		ip->_chksum = 0;
+		len = sizeof(struct ip_hdr);
 		shout = (struct sctphdr *)((caddr_t)ip + len);
 		break;
 #endif
@@ -11816,16 +11826,16 @@ sctp_send_resp_msg(struct sockaddr *src, struct sockaddr *dst,
 			sctp_m_freem(mout);
 			return;
 		}
-		udp = (struct udphdr *)shout;
-		udp->uh_sport = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
-		udp->uh_dport = port;
-		udp->uh_sum = 0;
-		udp->uh_ulen = htons((uint16_t)(sizeof(struct udphdr) +
+		udp = (struct udp_hdr *)shout;
+		udp->src = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
+		udp->dest = port;
+		udp->chksum = 0;
+		udp->len = htons((uint16_t)(sizeof(struct udp_hdr) +
 		                                sizeof(struct sctphdr) +
 		                                sizeof(struct sctp_chunkhdr) +
 		                                cause_len + padding_len));
-		len += sizeof(struct udphdr);
-		shout = (struct sctphdr *)((caddr_t)shout + sizeof(struct udphdr));
+		len += sizeof(struct udp_hdr);
+		shout = (struct sctphdr *)((caddr_t)shout + sizeof(struct udp_hdr));
 	} else {
 		udp = NULL;
 	}
@@ -11866,26 +11876,26 @@ sctp_send_resp_msg(struct sockaddr *src, struct sockaddr *dst,
 #if !defined(_WIN32) && !defined(__Userspace__)
 #if defined(__FreeBSD__)
 			if (V_udp_cksum) {
-				udp->uh_sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr, udp->uh_ulen + htons(IPPROTO_UDP));
+				udp->chksum = in_pseudo(ip->src.addr, ip->dest.addr, udp->len + htons(IPPROTO_UDP));
 			} else {
-				udp->uh_sum = 0;
+				udp->chksum = 0;
 			}
 #else
-			udp->uh_sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr, udp->uh_ulen + htons(IPPROTO_UDP));
+			udp->chksum = in_pseudo(ip->src.addr, ip->dest.addr, udp->len + htons(IPPROTO_UDP));
 #endif
 #else
-			udp->uh_sum = 0;
+			udp->chksum = 0;
 #endif
 		}
 #if defined(__FreeBSD__) && !defined(__Userspace__)
-		ip->ip_len = htons(len);
+		ip->_len = htons(len);
 #elif defined(__APPLE__) || defined(__Userspace__)
-		ip->ip_len = len;
+		ip->_len = len;
 #else
-		ip->ip_len = htons(len);
+		ip->_len = htons(len);
 #endif
 		if (port) {
-			shout->checksum = sctp_calculate_cksum(mout, sizeof(struct ip) + sizeof(struct udphdr));
+			shout->checksum = sctp_calculate_cksum(mout, sizeof(struct ip_hdr) + sizeof(struct udp_hdr));
 			SCTP_STAT_INCR(sctps_sendswcrc);
 #if !defined(_WIN32) && !defined(__Userspace__)
 #if defined(__FreeBSD__)
@@ -11902,7 +11912,7 @@ sctp_send_resp_msg(struct sockaddr *src, struct sockaddr *dst,
 			mout->m_pkthdr.csum_data = offsetof(struct sctphdr, checksum);
 			SCTP_STAT_INCR(sctps_sendhwcrc);
 #else
-			shout->checksum = sctp_calculate_cksum(mout, sizeof(struct ip));
+			shout->checksum = sctp_calculate_cksum(mout, sizeof(struct ip_hdr));
 			SCTP_STAT_INCR(sctps_sendswcrc);
 #endif
 		}
@@ -11930,14 +11940,14 @@ sctp_send_resp_msg(struct sockaddr *src, struct sockaddr *dst,
 	case AF_INET6:
 		ip6->ip6_plen = htons((uint16_t)(len - sizeof(struct ip6_hdr)));
 		if (port) {
-			shout->checksum = sctp_calculate_cksum(mout, sizeof(struct ip6_hdr) + sizeof(struct udphdr));
+			shout->checksum = sctp_calculate_cksum(mout, sizeof(struct ip6_hdr) + sizeof(struct udp_hdr));
 			SCTP_STAT_INCR(sctps_sendswcrc);
 #if !defined(__Userspace__)
 #if defined(_WIN32)
-			udp->uh_sum = 0;
+			udp->chksum = 0;
 #else
-			if ((udp->uh_sum = in6_cksum(o_pak, IPPROTO_UDP, sizeof(struct ip6_hdr), len - sizeof(struct ip6_hdr))) == 0) {
-				udp->uh_sum = 0xffff;
+			if ((udp->chksum = in6_cksum(o_pak, IPPROTO_UDP, sizeof(struct ip6_hdr), len - sizeof(struct ip6_hdr))) == 0) {
+				udp->chksum = 0xffff;
 			}
 #endif
 #endif

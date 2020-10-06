@@ -41,6 +41,7 @@
 #include <netinet/sctp_peeloff.h>
 #include <netinet/sctp_callout.h>
 #include <netinet/sctp_crc32.h>
+
 #ifdef INET6
 #include <netinet6/sctp6_var.h>
 #endif
@@ -52,7 +53,11 @@
 #endif
 #if !defined(_WIN32)
 #if defined INET || defined INET6
+#if 0
 #include <netinet/udp.h>
+#else
+#include "lwip/udp.h"
+#endif
 #endif
 #include <arpa/inet.h>
 #else
@@ -68,7 +73,8 @@ userland_cond_t accept_cond;
 MALLOC_DEFINE(M_PCB, "sctp_pcb", "sctp pcb");
 MALLOC_DEFINE(M_SONAME, "sctp_soname", "sctp soname");
 #define MAXLEN_MBUF_CHAIN  32
-
+#define UIO_MAXIOV 1024
+#define  ERESTART        85  /* Interrupted system call should be restarted */
 /* Prototypes */
 extern int sctp_sosend(struct socket *so, struct sockaddr *addr, struct uio *uio,
                        struct mbuf *top, struct mbuf *control, int flags,
@@ -1452,6 +1458,7 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 int
 sobind(struct socket *so, struct sockaddr *nam)
 {
+	printf("%s(%d)", __func__, nam->sa_family);
 	switch (nam->sa_family) {
 #if defined(INET)
 	case AF_INET:
@@ -1471,7 +1478,32 @@ sobind(struct socket *so, struct sockaddr *nam)
 /* Taken from  /src/sys/kern/uipc_syscalls.c
  * and modified for __Userspace__
  */
+//struct sockaddr_conn*
+/**
+ * 
+ * 
+ * #else
+struct sockaddr_conn {
+	uint16_t sconn_family;
+	uint16_t sconn_port;
+	void *sconn_addr;
+};
+#endif
 
+
+struct sockaddr_conn {
+	uint8_t sconn_len;
+	uint8_t sconn_family;
+	uint16_t sconn_port;
+	void *sconn_addr;
+};
+
+ * struct sockaddr {
+  u8_t        sa_len;
+  sa_family_t sa_family;
+  char        sa_data[14];
+};
+*/
 int
 usrsctp_bind(struct socket *so, struct sockaddr *name, int namelen)
 {
@@ -1481,12 +1513,15 @@ usrsctp_bind(struct socket *so, struct sockaddr *name, int namelen)
 		errno = EBADF;
 		return (-1);
 	}
-	if ((errno = getsockaddr(&sa, (caddr_t)name, namelen)) != 0)
+	if ((errno = getsockaddr(&sa, (caddr_t)name, namelen)) != 0){
+		printf("%s(%d) failed\n", __func__, __LINE__);
 		return (-1);
+	}
 
 	errno = sobind(so, sa);
 	FREE(sa, M_SONAME);
 	if (errno) {
+		printf("%s(%d) (%x:%d) failed\n", __func__, __LINE__, errno, errno);
 		return (-1);
 	} else {
 		return (0);
@@ -1880,6 +1915,7 @@ soconnect(struct socket *so, struct sockaddr *nam)
 	 */
 	if (so->so_state & (SS_ISCONNECTED|SS_ISCONNECTING) && (error = sodisconnect(so))) {
 		error = EISCONN;
+		printf("%s(%d) failed\n", __func__, __LINE__);
 	} else {
 		/*
 		 * Prevent accumulated error from previous connection from
@@ -1901,6 +1937,7 @@ soconnect(struct socket *so, struct sockaddr *nam)
 			error = sctpconn_connect(so, nam);
 			break;
 		default:
+			printf("%s(%d) failed\n", __func__, __LINE__);
 			error = EAFNOSUPPORT;
 		}
 	}
@@ -2858,8 +2895,12 @@ sctp_userspace_ip_output(int *result, struct mbuf *o_pak,
 	int iovcnt;
 	int len;
 	int send_count;
-	struct ip *ip;
-	struct udphdr *udp;
+	#if 0
+	struct ip_hdr *ip;
+	#else
+	struct ip_hdr *ip;
+	#endif
+	struct udp_hdr *udp;
 	struct sockaddr_in dst;
 #if defined(_WIN32)
 	WSAMSG win_msg_hdr;
@@ -2876,58 +2917,78 @@ sctp_userspace_ip_output(int *result, struct mbuf *o_pak,
 
 	m = SCTP_HEADER_TO_CHAIN(o_pak);
 	m_orig = m;
-
-	len = sizeof(struct ip);
+	#if 0
+	len = sizeof(struct ip_hdr);
+	#else
+	len = sizeof(struct ip_hdr);
+	#endif
+	
 	if (SCTP_BUF_LEN(m) < len) {
 		if ((m = m_pullup(m, len)) == 0) {
 			SCTP_PRINTF("Can not get the IP header in the first mbuf.\n");
 			return;
 		}
 	}
-	ip = mtod(m, struct ip *);
-	use_udp_tunneling = (ip->ip_p == IPPROTO_UDP);
+	#if 0
+	ip = mtod(m, struct ip_hdr *);
+	#else
+	ip = mtod(m, struct ip_hdr *);
+	#endif
+	use_udp_tunneling = (ip->_proto == IPPROTO_UDP);
 
 	if (use_udp_tunneling) {
-		len = sizeof(struct ip) + sizeof(struct udphdr);
+		#if 0
+		len = sizeof(struct ip_hdr) + sizeof(struct udp_hdr);
+		#else
+		len = sizeof(struct ip_hdr) + sizeof(struct udp_hdr);
+		#endif
 		if (SCTP_BUF_LEN(m) < len) {
 			if ((m = m_pullup(m, len)) == 0) {
 				SCTP_PRINTF("Can not get the UDP/IP header in the first mbuf.\n");
 				return;
 			}
-			ip = mtod(m, struct ip *);
+			#if 0
+			ip = mtod(m, struct ip_hdr *);
+			#else
+			ip = mtod(m, struct ip_hdr *);
+			#endif
 		}
-		udp = (struct udphdr *)(ip + 1);
+		udp = (struct udp_hdr *)(ip + 1);
 	} else {
 		udp = NULL;
 	}
 
 	if (!use_udp_tunneling) {
-		if (ip->ip_src.s_addr == INADDR_ANY) {
+		if (ip->src.addr == INADDR_ANY) {
 			/* TODO get addr of outgoing interface */
 			SCTP_PRINTF("Why did the SCTP implementation did not choose a source address?\n");
 		}
 		/* TODO need to worry about ro->ro_dst as in ip_output? */
 #if defined(__linux__) || defined(_WIN32) || (defined(__FreeBSD__) && (__FreeBSD_version >= 1100030))
 		/* need to put certain fields into network order for Linux */
-		ip->ip_len = htons(ip->ip_len);
+		ip->_len = htons(ip->_len);
 #endif
 	}
 
 	memset((void *)&dst, 0, sizeof(struct sockaddr_in));
 	dst.sin_family = AF_INET;
-	dst.sin_addr.s_addr = ip->ip_dst.s_addr;
+	dst.sin_addr.s_addr = ip->dest.addr;
 #ifdef HAVE_SIN_LEN
 	dst.sin_len = sizeof(struct sockaddr_in);
 #endif
 	if (use_udp_tunneling) {
-		dst.sin_port = udp->uh_dport;
+		dst.sin_port = udp->dest;
 	} else {
 		dst.sin_port = 0;
 	}
 
 	/* tweak the mbuf chain */
 	if (use_udp_tunneling) {
-		m_adj(m, sizeof(struct ip) + sizeof(struct udphdr));
+		#if 0
+		m_adj(m, sizeof(struct ip_hdr) + sizeof(struct udp_hdr));
+		#else
+		m_adj(m, sizeof(struct ip_hdr) + sizeof(struct udp_hdr));
+		#endif
 	}
 
 	send_count = 0;
@@ -3004,7 +3065,7 @@ void sctp_userspace_ip6_output(int *result, struct mbuf *o_pak,
 	int len;
 	int send_count;
 	struct ip6_hdr *ip6;
-	struct udphdr *udp;
+	struct udp_hdr *udp;
 	struct sockaddr_in6 dst;
 #if defined(_WIN32)
 	WSAMSG win_msg_hdr;
@@ -3035,7 +3096,7 @@ void sctp_userspace_ip6_output(int *result, struct mbuf *o_pak,
 	use_udp_tunneling = (ip6->ip6_nxt == IPPROTO_UDP);
 
 	if (use_udp_tunneling) {
-		len = sizeof(struct ip6_hdr) + sizeof(struct udphdr);
+		len = sizeof(struct ip6_hdr) + sizeof(struct udp_hdr);
 		if (SCTP_BUF_LEN(m) < len) {
 			if ((m = m_pullup(m, len)) == 0) {
 				SCTP_PRINTF("Can not get the UDP/IP header in the first mbuf.\n");
@@ -3043,7 +3104,7 @@ void sctp_userspace_ip6_output(int *result, struct mbuf *o_pak,
 			}
 			ip6 = mtod(m, struct ip6_hdr *);
 		}
-		udp = (struct udphdr *)(ip6 + 1);
+		udp = (struct udp_hdr *)(ip6 + 1);
 	} else {
 		udp = NULL;
 	}
@@ -3064,14 +3125,14 @@ void sctp_userspace_ip6_output(int *result, struct mbuf *o_pak,
 #endif
 
 	if (use_udp_tunneling) {
-		dst.sin6_port = udp->uh_dport;
+		dst.sin6_port = udp->dest;
 	} else {
 		dst.sin6_port = 0;
 	}
 
 	/* tweak the mbuf chain */
 	if (use_udp_tunneling) {
-		m_adj(m, sizeof(struct ip6_hdr) + sizeof(struct udphdr));
+		m_adj(m, sizeof(struct ip6_hdr) + sizeof(struct udp_hdr));
 	} else {
 	  m_adj(m, sizeof(struct ip6_hdr));
 	}
@@ -3137,7 +3198,32 @@ free_mbuf:
 	sctp_m_freem(m_orig);
 }
 #endif
+/**
+ * 
+ * lwip 
+ struct sockaddr {
+  u8_t        sa_len;
+  sa_family_t sa_family;
+  char        sa_data[14];
+};
 
+struct sockaddr_conn {
+	uint8_t sconn_len;
+	uint8_t sconn_family;
+	uint16_t sconn_port;
+	void *sconn_addr;
+};
+struct sockaddr_conn {
+#ifdef HAVE_SCONN_LEN
+	uint8_t sconn_len;
+	uint8_t sconn_family;
+#else
+	uint16_t sconn_family;
+#endif
+	uint16_t sconn_port;
+	void *sconn_addr;
+};
+*/
 void
 usrsctp_register_address(void *addr)
 {
@@ -3150,6 +3236,7 @@ usrsctp_register_address(void *addr)
 #endif
 	sconn.sconn_port = 0;
 	sconn.sconn_addr = addr;
+	printf("%s: %d: %p\n", __func__, sconn.sconn_family, addr);
 	sctp_add_addr_to_vrf(SCTP_DEFAULT_VRFID,
 	                     NULL,
 	                     0xffffffff,

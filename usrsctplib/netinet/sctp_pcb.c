@@ -53,14 +53,20 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_pcb.c 363323 2020-07-19 12:34:19Z tuex
 #include <netinet/sctp_bsd_addr.h>
 #if defined(INET) || defined(INET6)
 #if !defined(_WIN32)
+#if 0
 #include <netinet/udp.h>
+#else
+#include "lwip/udp.h"
+#endif
 #endif
 #endif
 #ifdef INET6
 #if defined(__Userspace__)
 #include "user_ip6_var.h"
 #else
+#if 0
 #include <netinet6/ip6_var.h>
+#endif
 #endif
 #endif
 #if defined(__FreeBSD__) && !defined(__Userspace__)
@@ -77,6 +83,7 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_pcb.c 363323 2020-07-19 12:34:19Z tuex
 #endif
 
 #if !defined(__FreeBSD__) || defined(__Userspace__)
+/** #memory. */
 struct sctp_base_info system_base_info;
 
 #endif
@@ -557,7 +564,7 @@ sctp_add_addr_to_vrf(uint32_t vrf_id, void *ifn, uint32_t ifn_index,
 	struct sctp_ifnlist *hash_ifn_head;
 	uint32_t hash_of_addr;
 	int new_ifn_af = 0;
-
+	printf("%s(%d): %s, family:%d, vrf_id:%d, ifn_type:%d, ifn_index:%d\n", __func__, __LINE__, if_name, addr->sa_family, vrf_id, ifn_type, ifn_index);
 #ifdef SCTP_DEBUG
 	SCTPDBG(SCTP_DEBUG_PCB4, "vrf_id 0x%x: adding address: ", vrf_id);
 	SCTPDBG_ADDR(SCTP_DEBUG_PCB4, addr);
@@ -583,6 +590,7 @@ sctp_add_addr_to_vrf(uint32_t vrf_id, void *ifn, uint32_t ifn_index,
 	sctp_ifnp = sctp_find_ifn(ifn, ifn_index);
 	if (sctp_ifnp) {
 		vrf = sctp_ifnp->vrf;
+		SCTPDBG(SCTP_DEBUG_PCB4, "find an old one.");
 	} else {
 		vrf = sctp_find_vrf(vrf_id);
 		if (vrf == NULL) {
@@ -593,6 +601,8 @@ sctp_add_addr_to_vrf(uint32_t vrf_id, void *ifn, uint32_t ifn_index,
 				SCTP_FREE(new_sctp_ifap, SCTP_M_IFA);
 				return (NULL);
 			}
+			SCTPDBG(SCTP_DEBUG_PCB4, "add new vrf(%d).", vrf_id);
+			
 		}
 	}
 	if (sctp_ifnp == NULL) {
@@ -612,8 +622,10 @@ sctp_add_addr_to_vrf(uint32_t vrf_id, void *ifn, uint32_t ifn_index,
 		if (if_name != NULL) {
 			SCTP_SNPRINTF(sctp_ifnp->ifn_name, SCTP_IFNAMSIZ, "%s", if_name);
 		} else {
-			SCTP_SNPRINTF(sctp_ifnp->ifn_name, SCTP_IFNAMSIZ, "%s", "unknown");
+			SCTP_SNPRINTF(sctp_ifnp->ifn_name, SCTP_IFNAMSIZ, "%s", "na");
+			
 		}
+		SCTPDBG(SCTP_DEBUG_PCB4, "if_name:%s, ", sctp_ifnp->ifn_name);
 		hash_ifn_head = &SCTP_BASE_INFO(vrf_ifn_hash)[(ifn_index & SCTP_BASE_INFO(vrf_ifn_hashmark))];
 		LIST_INIT(&sctp_ifnp->ifalist);
 		LIST_INSERT_HEAD(hash_ifn_head, sctp_ifnp, next_bucket);
@@ -3281,6 +3293,7 @@ sctp_inpcb_bind(struct socket *so, struct sockaddr *addr,
                 struct sctp_ifa *sctp_ifap, struct proc *p)
 #endif
 {
+	printf("%s(%d)\n", __func__, __LINE__);
 	/* bind a ep to a socket address */
 	struct sctppcbhead *head;
 	struct sctp_inpcb *inp, *inp_tmp;
@@ -3313,6 +3326,7 @@ sctp_inpcb_bind(struct socket *so, struct sockaddr *addr,
 	if ((inp->sctp_flags & SCTP_PCB_FLAGS_UNBOUND) == 0) {
 		/* already did a bind, subsequent binds NOT allowed ! */
 		SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTP_PCB, EINVAL);
+		printf("%s(%d) failed\n", __func__, __LINE__);
 		return (EINVAL);
 	}
 #if defined(__FreeBSD__) && !defined(__Userspace__)
@@ -3461,7 +3475,8 @@ sctp_inpcb_bind(struct socket *so, struct sockaddr *addr,
 		 */
 		/* got to be root to get at low ports */
 #if !(defined(_WIN32) && !defined(__Userspace__))
-		if (ntohs(lport) < IPPORT_RESERVED) {
+		//if (ntohs(lport) < IPPORT_RESERVED) {
+		if (ntohs(lport) < 1024) {
 			if ((p != NULL) && ((error =
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 				  priv_check(p, PRIV_NETINET_RESERVEDPORT)
@@ -3732,16 +3747,19 @@ sctp_inpcb_bind(struct socket *so, struct sockaddr *addr,
 		 * this earlier since need port for sctp_pcb_findep()
 		 */
 		if (sctp_ifap != NULL) {
+			printf("%s(%d)\n", __func__, __LINE__);
 			ifa = sctp_ifap;
 		} else {
 			/* Note for BSD we hit here always other
 			 * O/S's will pass things in via the
 			 * sctp_ifap argument.
 			 */
+			printf("%s(%d)\n", __func__, __LINE__);
 			ifa = sctp_find_ifa_by_addr(&store.sa,
 						    vrf_id, SCTP_ADDR_NOT_LOCKED);
 		}
 		if (ifa == NULL) {
+			printf("%s(%d)\n", __func__, __LINE__);
 			/* Can't find an interface with that address */
 			SCTP_INP_WUNLOCK(inp);
 			SCTP_INP_INFO_WUNLOCK();
@@ -4624,7 +4642,7 @@ sctp_add_remote_addr(struct sctp_tcb *stcb, struct sockaddr *newaddr,
 			}
 #if defined(INET) || defined(INET6)
 			if (net->port) {
-				net->mtu += (uint32_t)sizeof(struct udphdr);
+				net->mtu += (uint32_t)sizeof(struct udp_hdr);
 			}
 #endif
 		} else if (net->ro._s_addr != NULL) {
@@ -4680,7 +4698,7 @@ sctp_add_remote_addr(struct sctp_tcb *stcb, struct sockaddr *newaddr,
 			}
 #if defined(INET) || defined(INET6)
 			if (net->port) {
-				net->mtu += (uint32_t)sizeof(struct udphdr);
+				net->mtu += (uint32_t)sizeof(struct udp_hdr);
 			}
 #endif
 		} else {
@@ -4707,7 +4725,7 @@ sctp_add_remote_addr(struct sctp_tcb *stcb, struct sockaddr *newaddr,
 	}
 #if defined(INET) || defined(INET6)
 	if (net->port) {
-		net->mtu -= (uint32_t)sizeof(struct udphdr);
+		net->mtu -= (uint32_t)sizeof(struct udp_hdr);
 	}
 #endif
 	if (from == SCTP_ALLOC_ASOC) {
@@ -6490,7 +6508,7 @@ sctp_startup_mcore_threads(void)
 static struct mbuf *
 sctp_netisr_hdlr(struct mbuf *m, uintptr_t source)
 {
-	struct ip *ip;
+	struct ip_hdr *ip;
 	struct sctphdr *sh;
 	int offset;
 	uint32_t flowid, tag;
@@ -6499,14 +6517,14 @@ sctp_netisr_hdlr(struct mbuf *m, uintptr_t source)
 	 * No flow id built by lower layers fix it so we
 	 * create one.
 	 */
-	ip = mtod(m, struct ip *);
+	ip = mtod(m, struct ip_hdr *);
 	offset = (ip->ip_hl << 2) + sizeof(struct sctphdr);
 	if (SCTP_BUF_LEN(m) < offset) {
 		if ((m = m_pullup(m, offset)) == NULL) {
 			SCTP_STAT_INCR(sctps_hdrops);
 			return (NULL);
 		}
-		ip = mtod(m, struct ip *);
+		ip = mtod(m, struct ip_hdr *);
 	}
 	sh = (struct sctphdr *)((caddr_t)ip + (ip->ip_hl << 2));
 	tag = htonl(sh->v_tag);
