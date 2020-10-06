@@ -122,7 +122,11 @@ struct icmp {
 			uint32_t its_ttime;	/* Transmit */
 		} id_ts;
 		struct id_ip  {
-			struct ip idi_ip;
+			#if 0
+			struct ip_hdr idi_ip;
+			#else
+			struct ip_hdr idi_ip;
+			#endif
 			/* options and then 64 bits of data */
 		} id_ip;
 		struct icmp_ra_addr id_radv;
@@ -149,7 +153,11 @@ struct icmp {
 #define	ICMP_MINLEN	8				/* abs minimum */
 #define	ICMP_TSLEN	(8 + 3 * sizeof (uint32_t))	/* timestamp */
 #define	ICMP_MASKLEN	12				/* address mask */
-#define	ICMP_ADVLENMIN	(8 + sizeof (struct ip) + 8)	/* min */
+#if 0
+#define	ICMP_ADVLENMIN	(8 + sizeof (struct ip_hdr) + 8)	/* min */
+#else
+#define	ICMP_ADVLENMIN	(8 + sizeof (struct ip_hdr) + 8)	/* min */
+#endif
 #define	ICMP_ADVLEN(p)	(8 + ((p)->icmp_ip.ip_hl << 2) + 8)
 	/* N.B.: must separately check that ip_hl >= 5 */
 

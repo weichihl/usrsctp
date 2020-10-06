@@ -577,30 +577,53 @@ struct sctp_auth_chunk {
 			   sizeof(struct sctphdr))
 
 #else
+#if 0
 #define SCTP_MAX_OVERHEAD (sizeof(struct sctp_data_chunk) + \
 			   sizeof(struct sctphdr) + \
 			   sizeof(struct sctp_ecne_chunk) + \
 			   sizeof(struct sctp_sack_chunk) + \
-			   sizeof(struct ip))
+			   sizeof(struct ip_hdr))
 
 #define SCTP_MED_OVERHEAD (sizeof(struct sctp_data_chunk) + \
 			   sizeof(struct sctphdr) + \
-			   sizeof(struct ip))
+			   sizeof(struct ip_hdr))
 
 
-#define SCTP_MIN_OVERHEAD (sizeof(struct ip) + \
+#define SCTP_MIN_OVERHEAD (sizeof(struct ip_hdr) + \
 			   sizeof(struct sctphdr))
+#else
+#define SCTP_MAX_OVERHEAD (sizeof(struct sctp_data_chunk) + \
+			   sizeof(struct sctphdr) + \
+			   sizeof(struct sctp_ecne_chunk) + \
+			   sizeof(struct sctp_sack_chunk) + \
+			   sizeof(struct ip_hdr))
 
+#define SCTP_MED_OVERHEAD (sizeof(struct sctp_data_chunk) + \
+			   sizeof(struct sctphdr) + \
+			   sizeof(struct ip_hdr))
+
+
+#define SCTP_MIN_OVERHEAD (sizeof(struct ip_hdr) + \
+			   sizeof(struct sctphdr))
+#endif
 #endif /* INET6 */
 #endif /* !SCTP_MAX_OVERHEAD */
 
+#if 0
 #define SCTP_MED_V4_OVERHEAD (sizeof(struct sctp_data_chunk) + \
 			      sizeof(struct sctphdr) + \
-			      sizeof(struct ip))
+			      sizeof(struct ip_hdr))
 
-#define SCTP_MIN_V4_OVERHEAD (sizeof(struct ip) + \
+#define SCTP_MIN_V4_OVERHEAD (sizeof(struct ip_hdr) + \
 			      sizeof(struct sctphdr))
+#else
+#define SCTP_MED_V4_OVERHEAD (sizeof(struct sctp_data_chunk) + \
+			      sizeof(struct sctphdr) + \
+			      sizeof(struct ip_hdr))
 
+#define SCTP_MIN_V4_OVERHEAD (sizeof(struct ip_hdr) + \
+			      sizeof(struct sctphdr))
+#endif
 #if defined(_WIN32) && !defined(__Userspace__)
 #include <packoff.h>
 #endif

@@ -412,15 +412,64 @@ sctp_init_ifns_for_vrf(int vrfid)
 #endif
 }
 #elif defined(__Userspace__)
+/**
+ * @brief add the network interface into vrf.
+ * 
+ * @param[in] vrfid 
+*/
 static void
 sctp_init_ifns_for_vrf(int vrfid)
 {
+#if 1
+	printf("****************%s*********************", __func__);
+	struct sctp_ifa *sctp_ifa;
+	uint32_t ifa_flags;
+	extern char* esp_get_ip(void);
+	/**
+	 * #if LWIP_IPV4
+struct sockaddr_in {
+  u8_t            sin_len;
+  sa_family_t     sin_family;
+  in_port_t       sin_port;
+  struct in_addr  sin_addr;
+#define SIN_ZERO_LEN 8
+  char            sin_zero[SIN_ZERO_LEN];
+};
+#endif
+struct sockaddr {
+  u8_t        sa_len;
+  sa_family_t sa_family;
+  char        sa_data[14];
+};
+	*/
+	struct sockaddr_in* in_addr = malloc(sizeof(struct sockaddr_in));
+
+	in_addr->sin_family = AF_INET;
+	in_addr->sin_port = 0;
+	MEMCPY(&in_addr->sin_addr, esp_get_ip(), 4);
+
+
+
+	ifa_flags = 0;
+	sctp_ifa = sctp_add_addr_to_vrf(vrfid,
+									NULL,
+									0,
+									0,
+									"esp32",
+									NULL,
+									(struct sockaddr*)in_addr,
+									ifa_flags,
+									0);
+	if (sctp_ifa) {
+		sctp_ifa->localifa_flags &= ~SCTP_ADDR_DEFER_USE;
+	}
+	free(in_addr);
+#else
 #if defined(INET) || defined(INET6)
 	int rc;
 	struct ifaddrs *ifa, *ifas;
 	struct sctp_ifa *sctp_ifa;
 	uint32_t ifa_flags;
-
 	rc = getifaddrs(&ifas);
 	if (rc != 0) {
 		return;
@@ -473,6 +522,7 @@ sctp_init_ifns_for_vrf(int vrfid)
 		}
 	}
 	freeifaddrs(ifas);
+#endif
 #endif
 }
 #endif

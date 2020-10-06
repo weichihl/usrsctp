@@ -126,7 +126,7 @@ struct peer_connection {
 #endif /* defined(_WIN32) && !defined(__MINGW32__) */
 struct rtcweb_datachannel_open_request {
 	uint8_t msg_type; /* DATA_CHANNEL_OPEN_REQUEST */
-	uint8_t channel_type;
+	uint8_t channel_type; /** DATA_CHANNEL_RELIABLE*/
 	uint16_t flags;
 	uint16_t reliability_params;
 	int16_t priority;

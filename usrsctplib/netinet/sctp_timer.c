@@ -58,7 +58,11 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_timer.c 362054 2020-06-11 13:34:09Z tu
 #include <netinet/sctp_uio.h>
 #if defined(INET) || defined(INET6)
 #if !(defined(_WIN32) && defined(__Userspace__))
+#if 0
 #include <netinet/udp.h>
+#else
+#include "lwip/udp.h"
+#endif
 #endif
 #endif
 
@@ -1541,7 +1545,7 @@ sctp_pathmtu_timer(struct sctp_inpcb *inp,
 #endif
 #if defined(INET) || defined(INET6)
 			if (net->port) {
-				mtu -= sizeof(struct udphdr);
+				mtu -= sizeof(struct udp_hdr);
 			}
 #endif
 			if (mtu > next_mtu) {

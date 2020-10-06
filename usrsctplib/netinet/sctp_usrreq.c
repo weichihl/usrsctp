@@ -59,7 +59,11 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_usrreq.c 363275 2020-07-17 15:09:49Z t
 #if defined(__Userspace__)
 #include <netinet/sctp_callout.h>
 #else
+#if 0
 #include <netinet/udp.h>
+#else
+#include "lwip/udp.h"
+#endif
 #endif
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 #include <sys/eventhandler.h>
@@ -71,7 +75,9 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_usrreq.c 363275 2020-07-17 15:09:49Z t
 
 extern const struct sctp_cc_functions sctp_cc_functions[];
 extern const struct sctp_ss_functions sctp_ss_functions[];
-
+/**
+ * @brief the initializaion of sctp.
+*/
 void
 #if defined(__Userspace__)
 sctp_init(uint16_t port,
@@ -330,13 +336,13 @@ sctp_notify(struct sctp_inpcb *inp,
 		}
 		/* Update the path MTU. */
 		if (net->port) {
-			next_mtu -= sizeof(struct udphdr);
+			next_mtu -= sizeof(struct udp_hdr);
 		}
 		if (net->mtu > next_mtu) {
 			net->mtu = next_mtu;
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 			if (net->port) {
-				sctp_hc_set_mtu(&net->ro._l_addr, inp->fibnum, next_mtu + sizeof(struct udphdr));
+				sctp_hc_set_mtu(&net->ro._l_addr, inp->fibnum, next_mtu + sizeof(struct udp_hdr));
 			} else {
 				sctp_hc_set_mtu(&net->ro._l_addr, inp->fibnum, next_mtu);
 			}
@@ -366,9 +372,9 @@ sctp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
 #endif
 {
 #if defined(__FreeBSD__) && !defined(__Userspace__)
-	struct ip *outer_ip;
+	struct ip_hdr *outer_ip;
 #endif
-	struct ip *inner_ip;
+	struct ip_hdr *inner_ip;
 	struct sctphdr *sh;
 	struct icmp *icmp;
 	struct sctp_inpcb *inp;
@@ -389,11 +395,11 @@ sctp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
 		return;
 	}
 	if (vip != NULL) {
-		inner_ip = (struct ip *)vip;
+		inner_ip = (struct ip_hdr *)vip;
 		icmp = (struct icmp *)((caddr_t)inner_ip -
-		    (sizeof(struct icmp) - sizeof(struct ip)));
+		    (sizeof(struct icmp) - sizeof(struct ip_hdr)));
 #if defined(__FreeBSD__) && !defined(__Userspace__)
-		outer_ip = (struct ip *)((caddr_t)icmp - sizeof(struct ip));
+		outer_ip = (struct ip_hdr *)((caddr_t)icmp - sizeof(struct ip_hdr));
 #endif
 		sh = (struct sctphdr *)((caddr_t)inner_ip + (inner_ip->ip_hl << 2));
 		memset(&src, 0, sizeof(struct sockaddr_in));
@@ -402,14 +408,14 @@ sctp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
 		src.sin_len = sizeof(struct sockaddr_in);
 #endif
 		src.sin_port = sh->src_port;
-		src.sin_addr = inner_ip->ip_src;
+		src.sin_addr = inner_ip->src;
 		memset(&dst, 0, sizeof(struct sockaddr_in));
 		dst.sin_family = AF_INET;
 #ifdef HAVE_SIN_LEN
 		dst.sin_len = sizeof(struct sockaddr_in);
 #endif
 		dst.sin_port = sh->dest_port;
-		dst.sin_addr = inner_ip->ip_dst;
+		dst.sin_addr = inner_ip->dest;
 		/*
 		 * 'dst' holds the dest of the packet that failed to be sent.
 		 * 'src' holds our local endpoint address. Thus we reverse
@@ -437,8 +443,8 @@ sctp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
 				}
 			} else {
 #if defined(__FreeBSD__) && !defined(__Userspace__)
-				if (ntohs(outer_ip->ip_len) >=
-				    sizeof(struct ip) +
+				if (ntohs(outer_ip->_len) >=
+				    sizeof(struct ip_hdr) +
 				    8 + (inner_ip->ip_hl << 2) + 20) {
 					/*
 					 * In this case we can check if we
@@ -464,9 +470,9 @@ sctp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
 			            icmp->icmp_type,
 			            icmp->icmp_code,
 #if defined(__FreeBSD__) && !defined(__Userspace__)
-			            ntohs(inner_ip->ip_len),
+			            ntohs(inner_ip->_len),
 #else
-			            inner_ip->ip_len,
+			            inner_ip->_len,
 #endif
 			            (uint32_t)ntohs(icmp->icmp_nextmtu));
 #if defined(__Userspace__)
@@ -714,6 +720,7 @@ sctp_bind(struct socket *so, struct mbuf *nam, struct proc *p)
 	inp = (struct sctp_inpcb *)so->so_pcb;
 	if (inp == NULL) {
 		SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTP_USRREQ, EINVAL);
+		printf("%s(%d) failed\n", __func__, __LINE__);
 		return (EINVAL);
 	}
 	if (addr != NULL) {
@@ -724,6 +731,7 @@ sctp_bind(struct socket *so, struct mbuf *nam, struct proc *p)
 		if (addr->sa_family != AF_INET) {
 #endif
 			SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTP_USRREQ, EINVAL);
+			printf("%s(%d) failed\n", __func__, __LINE__);
 			return (EINVAL);
 		}
 	}
@@ -774,6 +782,7 @@ sctpconn_bind(struct socket *so, struct sockaddr *addr)
 	inp = (struct sctp_inpcb *)so->so_pcb;
 	if (inp == NULL) {
 		SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTP_USRREQ, EINVAL);
+		printf("%s(%d) failed\n", __func__, __LINE__);
 		return (EINVAL);
 	}
 	if (addr != NULL) {
@@ -784,6 +793,7 @@ sctpconn_bind(struct socket *so, struct sockaddr *addr)
 		if (addr->sa_family != AF_CONN) {
 #endif
 			SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTP_USRREQ, EINVAL);
+			printf("%s(%d) failed\n", __func__, __LINE__);
 			return (EINVAL);
 		}
 	}
