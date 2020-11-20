@@ -38,6 +38,8 @@ if (NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE "DEBUG")
 endif ()
 
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR};${CMAKE_MODULE_PATH}")
+
 include(CheckStructHasMember)
 include(CheckIncludeFile)
 include(CheckIncludeFiles)
@@ -79,17 +81,30 @@ option(sctp_sanitizer_memory "Compile with memory sanitizer" 0)
 
 option(sctp_build_fuzzer "Compile in clang fuzzing mode" 0)
 
-option(sctp_enable_openssl "Enable openssl support" ON)
+option(sctp_enable_openssl "Enable openssl support" OFF)
+
+option(sctp_enable_mbedtls "Enable mbedtls support" ON)
 
 if (sctp_sanitizer_address AND sctp_sanitizer_memory)
 	message(FATAL_ERROR "Can not compile with both sanitizer options")
 endif ()
+
+if(sctp_enable_openssl AND sctp_enable_mbedtls)
+	message(FATAL_ERROR "ssl conflict. can not enable openssl and mbedtls simultaneously.")
+endif()
 
 if(sctp_enable_openssl)
 	add_definitions(-DSCTP_USE_OPENSSL_SHA1)
 	find_package(OpenSSL REQUIRED)
 	include_directories(${OPENSSL_INCLUDE_DIR})
 endif()
+
+if(sctp_enable_mbedtls)
+	add_definitions(-DSCTP_USE_MBEDTLS_SHA1)
+	find_package(MbedTLS REQUIRED)
+	include_directories(${MBEDTLS_INCLUDE_DIRS})
+endif()
+
 
 
 

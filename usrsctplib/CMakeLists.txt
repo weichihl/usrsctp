@@ -175,6 +175,11 @@ if(sctp_enable_openssl)
 	target_link_libraries(usrsctp OpenSSL::Crypto)
 endif()
 
+if(sctp_enable_mbedtls)
+	include_directories(${MBEDTLS_INCLUDE_DIRS})
+	target_link_libraries(${MBEDTLS_LIBRARIES})
+endif()
+
 if (WIN32)
 	message(STATUS "link library: ws2_32")
 	target_link_libraries(usrsctp ws2_32 iphlpapi)

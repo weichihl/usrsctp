@@ -46,6 +46,8 @@ __FBSDID("$FreeBSD$");
 #include <pk11pub.h>
 #elif defined(SCTP_USE_OPENSSL_SHA1)
 #include <openssl/sha.h>
+#elif defined(DSCTP_USE_MBEDTLS_SHA1)
+#include <mbedtls/md.h>
 #endif
 
 struct sctp_sha1_context {

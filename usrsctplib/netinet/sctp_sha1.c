@@ -81,6 +81,27 @@ sctp_sha1_final(unsigned char *digest, struct sctp_sha1_context *ctx)
 	SHA1_Final(digest, &ctx->sha_ctx);
 }
 
+#elif defined(SCTP_USE_MBEDTLS_SHA1)
+
+void
+sctp_sha1_init(struct sctp_sha1_context *ctx)
+{
+
+}
+
+
+void
+sctp_sha1_update(struct sctp_sha1_context *ctx, const unsigned char *ptr, unsigned int siz)
+{
+
+}
+
+void
+sctp_sha1_final(unsigned char *digest, struct sctp_sha1_context *ctx)
+{
+
+}
+
 #else
 
 #include <string.h>
