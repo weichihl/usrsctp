@@ -79,9 +79,18 @@ option(sctp_sanitizer_memory "Compile with memory sanitizer" 0)
 
 option(sctp_build_fuzzer "Compile in clang fuzzing mode" 0)
 
+option(sctp_enable_openssl "Enable openssl support" ON)
+
 if (sctp_sanitizer_address AND sctp_sanitizer_memory)
 	message(FATAL_ERROR "Can not compile with both sanitizer options")
 endif ()
+
+if(sctp_enable_openssl)
+	add_definitions(-DSCTP_USE_OPENSSL_SHA1)
+	find_package(OpenSSL REQUIRED)
+	include_directories(${OPENSSL_INCLUDE_DIR})
+endif()
+
 
 
 #################################################

@@ -170,6 +170,11 @@ add_library(usrsctp ${usrsctp_sources} ${usrsctp_headers})
 
 target_include_directories(usrsctp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+if(sctp_enable_openssl)
+	include_directories(${OPENSSL_INCLUDE_DIR})
+	target_link_libraries(usrsctp OpenSSL::Crypto)
+endif()
+
 if (WIN32)
 	message(STATUS "link library: ws2_32")
 	target_link_libraries(usrsctp ws2_32 iphlpapi)
