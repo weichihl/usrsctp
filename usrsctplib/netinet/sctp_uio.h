@@ -52,7 +52,7 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_uio.h 362473 2020-06-21 23:12:56Z tuex
 #endif
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
+//#include <netinet/in.h>
 #endif
 #if defined(_WIN32) && !defined(__Userspace__)
 #pragma warning(push)

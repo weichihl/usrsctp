@@ -35,7 +35,7 @@
 #if defined(__Userspace__)
 #include <sys/types.h>
 #if !defined(_WIN32)
-#include <sys/wait.h>
+//#include <sys/wait.h>
 #include <unistd.h>
 #include <pthread.h>
 #endif

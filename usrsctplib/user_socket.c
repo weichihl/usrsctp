@@ -59,7 +59,7 @@
 #include "lwip/udp.h"
 #endif
 #endif
-#include <arpa/inet.h>
+//#include <arpa/inet.h>
 #else
 #include <user_socketvar.h>
 #endif

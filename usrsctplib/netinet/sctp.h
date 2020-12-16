@@ -669,4 +669,28 @@ struct sctp_error_auth_invalid_hmac {
 #define SCTP_LOG_AT_SEND_2_OUTQ				0x08000000
 #define SCTP_LOG_TRY_ADVANCE				0x10000000
 
+//////////////////////////////////////////////////////////////////////
+#define u_char          uint8_t
+#define u_short         uint16_t
+#define u_int           uint32_t
+#define u_long          uint32_t
+
+struct cmsghdr {
+   size_t cmsg_len;    /* Data byte count, including header
+                          (type is socklen_t in POSIX) */
+   int    cmsg_level;  /* Originating protocol */
+   int    cmsg_type;   /* Protocol-specific type */
+/* followed by
+   unsigned char cmsg_data[]; */
+};
+
+#define SOCK_SEQPACKET  5
+
+/* Maximum queue length specifiable by listen.  */
+#define SOMAXCONN       128
+
+#define MSG_TRUNC       0x20
+#define MSG_EOR         0x80
+//////////////////////////////////////////////////////////////////////
+
 #endif				/* !_NETINET_SCTP_H_ */
