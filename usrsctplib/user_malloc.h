@@ -38,7 +38,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #if !defined(_WIN32)
-#include <strings.h>
+//#include <strings.h>
 #include <stdint.h>
 #else
 #if (defined(_MSC_VER) && _MSC_VER >= 1600) || (defined(__MSVCRT_VERSION__) && __MSVCRT_VERSION__ >= 1400)
@@ -64,6 +64,11 @@
 #define	M_USE_RESERVE	0x0400		/* can alloc out of reserve memory */
 
 #define	M_MAGIC		877983977	/* time when first defined :-) */
+
+#define u_char                   uint8_t
+#define u_short                  uint16_t
+#define u_int                    uint32_t
+#define u_long                   uint32_t
 
 /*
  * Two malloc type structures are present: malloc_type, which is used by a

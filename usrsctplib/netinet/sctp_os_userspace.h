@@ -288,7 +288,8 @@ typedef char* caddr_t;
 
 #else /* !defined(Userspace_os_Windows) */
 #include <sys/socket.h>
-#if defined(__DragonFly__) || defined(__FreeBSD__) || defined(__linux__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__native_client__) || defined(__Fuchsia__)
+#if defined(__DragonFly__) || defined(__FreeBSD__) || defined(__linux__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__native_client__) || defined(__Fuchsia__) || defined(KVS_PLAT_RTK_FREERTOS)
+#include <FreeRTOS_POSIX.h>  // this sould be included before including <pthread.h>. It contains the configuration of the Realtek platform.
 #include <pthread.h>
 #endif
 typedef pthread_mutex_t userland_mutex_t;
@@ -460,8 +461,8 @@ struct sx {int dummy;};
 /* on FreeBSD, this results in a redefintion of struct route */
 /* #include <net/route.h> */
 #if !defined(_WIN32) && !defined(__native_client__)
-#include <net/if.h>
-#include <netinet/in.h>
+//#include <net/if.h>
+//#include <netinet/in.h>
 #if 0
 #include <netinet/in_systm.h>
 #endif
@@ -491,12 +492,15 @@ struct sx {int dummy;};
 #endif
 
 /* for ioctl */
+#if 0
 #include <sys/ioctl.h>
+#endif
 
 /* for close, etc. */
 #include <unistd.h>
 /* for gettimeofday */
-#include <sys/time.h>
+//#include <sys/time.h>
+#include <time.h>
 #endif
 
 /* lots of errno's used and needed in userspace */
@@ -1146,7 +1150,7 @@ sctp_get_mbuf_for_msg(unsigned int space_needed, int want_header, int how, int a
 #define LIST_FOREACH_SAFE LIST_FOREACH_MUTABLE
 #endif
 
-#if defined(__native_client__)
+#if 1//defined(__native_client__)
 #define	timercmp(tvp, uvp, cmp)						\
 	(((tvp)->tv_sec == (uvp)->tv_sec) ?				\
 	    ((tvp)->tv_usec cmp (uvp)->tv_usec) :			\
