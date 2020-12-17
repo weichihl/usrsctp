@@ -424,7 +424,7 @@ sctp_init_ifns_for_vrf(int vrfid)
 	printf("****************%s*********************", __func__);
 	struct sctp_ifa *sctp_ifa;
 	uint32_t ifa_flags;
-	extern char* esp_get_ip(void);
+	extern char* ameba_get_ip(void);
 	/**
 	 * #if LWIP_IPV4
 struct sockaddr_in {
@@ -446,7 +446,7 @@ struct sockaddr {
 
 	in_addr->sin_family = AF_INET;
 	in_addr->sin_port = 0;
-	MEMCPY(&in_addr->sin_addr, esp_get_ip(), 4);
+	MEMCPY(&in_addr->sin_addr, ameba_get_ip(), 4);
 
 
 

@@ -1130,6 +1130,18 @@ sctp_get_mbuf_for_msg(unsigned int space_needed, int want_header, int how, int a
 		}                                  \
 	} while (0)
 #endif
+          
+#ifndef timevaladd
+#define timevaladd(tp1, tp2)                       \
+	do {                                       \
+		(tp1)->tv_sec += (tp2)->tv_sec;	   \
+		(tp1)->tv_usec += (tp2)->tv_usec;  \
+		if ((tp1)->tv_usec >= 1000000) {   \
+			(tp1)->tv_sec++;           \
+			(tp1)->tv_usec -= 1000000; \
+		}                                  \
+	} while (0)
+#endif
 
 #if defined(__linux__)
 #if !defined(TAILQ_FOREACH_SAFE)
@@ -1159,7 +1171,7 @@ sctp_get_mbuf_for_msg(unsigned int space_needed, int want_header, int how, int a
 
 #define SCTP_IS_LISTENING(inp) ((inp->sctp_flags & SCTP_PCB_FLAGS_ACCEPTING) != 0)
 
-#if defined(__APPLE__) || defined(__DragonFly__) || defined(__linux__) || defined(__native_client__) || defined(__NetBSD__) || defined(_WIN32) || defined(__Fuchsia__)
+#if defined(__APPLE__) || defined(__DragonFly__) || defined(__linux__) || defined(__native_client__) || defined(__NetBSD__) || defined(_WIN32) || defined(__Fuchsia__) || defined(KVS_PLAT_RTK_FREERTOS)
 int
 timingsafe_bcmp(const void *, const void *, size_t);
 #endif
