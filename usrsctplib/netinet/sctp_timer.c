@@ -525,7 +525,7 @@ sctp_mark_all_for_resend(struct sctp_tcb *stcb,
 	}
 	tv.tv_sec = cur_rto / 1000000;
 	tv.tv_usec = cur_rto % 1000000;
-#if !(defined(__FreeBSD__) && !defined(__Userspace__))
+#if 0//!(defined(__FreeBSD__) && !defined(__Userspace__))
 	timersub(&now, &tv, &min_wait);
 #else
 	min_wait = now;
@@ -1459,7 +1459,7 @@ sctp_heartbeat_timer(struct sctp_inpcb *inp, struct sctp_tcb *stcb,
 
 		if ((net->last_sent_time.tv_sec > 0) ||
 		    (net->last_sent_time.tv_usec > 0)) {
-#if defined(__FreeBSD__) && !defined(__Userspace__)
+#if 1//(defined(__FreeBSD__) && !defined(__Userspace__)) //|| defined(KVS_PLAT_RTK_FREERTOS)
 			struct timeval diff;
 
 			SCTP_GETTIME_TIMEVAL(&diff);

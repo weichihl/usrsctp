@@ -103,10 +103,10 @@ init_random(void)
 	seed = 0;
 	seed |= (unsigned int)now.tv_sec;
 	seed |= (unsigned int)now.tv_usec;
-#if !defined(_WIN32) &&! defined(__native_client__)
+#if !defined(_WIN32) &&! defined(__native_client__) && !defined(KVS_PLAT_RTK_FREERTOS)
 	seed |= getpid();
 #endif
-#if defined(_WIN32) || defined(__native_client__)
+#if defined(_WIN32) || defined(__native_client__) || defined(KVS_PLAT_RTK_FREERTOS)
 	srand(seed);
 #else
 	srandom(seed);
@@ -122,7 +122,7 @@ read_random(void *buf, int count)
 
 	/* Fill buf[] with random(9) output */
 	for (i = 0; i < count; i+= (int)sizeof(uint32_t)) {
-		randval = random();
+		randval = rand(); //random()
 		size = MIN(count - i, (int)sizeof(uint32_t));
 		memcpy(&((char *)buf)[i], &randval, (size_t)size);
 	}

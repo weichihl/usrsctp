@@ -37,6 +37,9 @@
 __FBSDID("$FreeBSD$");
 #endif
 
+#if defined(KVS_PLAT_RTK_FREERTOS)
+#include <lwip/def.h>
+#endif
 
 #ifndef __NETINET_SCTP_SHA1_H__
 #define __NETINET_SCTP_SHA1_H__

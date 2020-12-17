@@ -2769,7 +2769,7 @@ sctp_handle_cookie_echo(struct mbuf *m, int iphlen, int offset,
 		cause->cause.code = htons(SCTP_CAUSE_STALE_COOKIE);
 		cause->cause.length = htons((sizeof(struct sctp_paramhdr) +
 		    (sizeof(uint32_t))));
-#if !(defined(__FreeBSD__) && !defined(__Userspace__))
+#if 0//!(defined(__FreeBSD__) && !defined(__Userspace__))
 		timersub(&now, &time_expires, &diff);
 #else
 		diff = now;

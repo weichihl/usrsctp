@@ -6863,7 +6863,7 @@ sctp_set_prsctp_policy(struct sctp_stream_queue_pending *sp)
 		/* TODO sctp_constants.h needs alternative time macros when
 		 *  _KERNEL is undefined.
 		 */
-#if !(defined(__FreeBSD__) && !defined(__Userspace__))
+#if 0//!(defined(__FreeBSD__) && !defined(__Userspace__))
 		timeradd(&sp->ts, &tv, &sp->ts);
 #else
 		timevaladd(&sp->ts, &tv);
