@@ -111,8 +111,10 @@ static inline void atomic_init(void) {} /* empty when we are not using atomic_mt
  *
  * Returns 0 on failure, non-zero on success
  */
-
-#define atomic_cmpset_int(dst, exp, src) atomic_compare_exchange_strong((atomic_uint*)dst, (atomic_uint*)exp, src) //__sync_bool_compare_and_swap(dst, exp, src)
+static inline bool atomic_compare_and_set(int* dst, int exp, int src){
+  return atomic_compare_exchange_strong((atomic_int*)dst, (atomic_int*)&exp, (atomic_int)src);
+}
+#define atomic_cmpset_int(dst, exp, src) atomic_compare_and_set((int*)dst, (int)exp, (int)src)  //__sync_bool_compare_and_swap(dst, exp, src)
 
 #define SCTP_DECREMENT_AND_CHECK_REFCOUNT(addr) (atomic_fetchadd_int(addr, -1) == 1)
 #if defined(INVARIANTS)
